@@ -1,0 +1,452 @@
+---
+title: "AMS 580 Final Exam"
+author: "Kachun Huang"
+date: "2025-05-14"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Final Exam **Seat Number C5**
+
+# Task 1
+
+## Import Library
+
+```{r,warning = FALSE, message = FALSE}
+library(dplyr)
+library(caret)
+library(randomForest)
+library(xgboost)
+library(Matrix)
+library(keras)
+library(tensorflow)
+library(reticulate)
+library(tidyverse)
+library(tidyquant)
+library(zoo)
+library(magrittr)
+```
+
+## Import Data
+
+```{r}
+data1 <- read.csv("/Users/thomashuang/Downloads/data_1.csv")
+head(data1)
+```
+
+```{r}
+str(data1)
+```
+
+## Data Cleaning
+
+### Remove Missing rows
+
+```{r}
+data1 <- na.omit(data1)
+str(data1)
+```
+
+After Remove NAs, there are 1100 observations left.
+
+## Data Splitting
+
+```{r}
+set.seed(2025)
+train_idx <- createDataPartition(data1$Anxiety.Level..1.10., p = 0.75, list = FALSE)
+train_data1 <- data1[train_idx, ]
+test_data1 <- data1[-train_idx, ]
+```
+
+For Random Forest
+
+```{r}
+train_data1_rf <- train_data1
+train_data1_rf$Gender <- factor(train_data1$Gender)
+train_data1_rf$Occupation <- factor(train_data1$Occupation)
+train_data1_rf$Smoking <- factor(train_data1$Smoking)
+train_data1_rf$Family.History.of.Anxiety <- factor(train_data1$Family.History.of.Anxiety)
+train_data1_rf$Dizziness  <- factor(train_data1$Dizziness)
+train_data1_rf$Medication  <- factor(train_data1$Medication)
+train_data1_rf$Recent.Major.Life.Event <- factor(train_data1$Recent.Major.Life.Event )
+
+test_data1_rf <- test_data1
+test_data1_rf$Gender <- factor(test_data1$Gender)
+test_data1_rf$Occupation <- factor(test_data1$Occupation)
+test_data1_rf$Smoking <- factor(test_data1$Smoking)
+test_data1_rf$Family.History.of.Anxiety <- factor(test_data1$Family.History.of.Anxiety)
+test_data1_rf$Dizziness  <- factor(test_data1$Dizziness)
+test_data1_rf$Medication  <- factor(test_data1$Medication)
+test_data1_rf$Recent.Major.Life.Event <- factor(test_data1$Recent.Major.Life.Event )
+```
+
+For XgBoost
+
+```{r}
+# Prepare data for XGBoost
+X_train <- model.matrix(Anxiety.Level..1.10. ~., data = train_data1)
+y_train <- train_data1$Anxiety.Level..1.10.
+X_test <- model.matrix(Anxiety.Level..1.10. ~., data = test_data1)
+y_test <- test_data1$Anxiety.Level..1.10.
+```
+
+## RandomForest
+
+```{r}
+set.seed(2025)
+
+# 10-fold CV
+control <- trainControl(
+  method = "cv", 
+  number = 10
+  )
+
+# train the rf using 10-fold CV
+model <- caret::train(
+  Anxiety.Level..1.10. ~ ., 
+  data = train_data1_rf, 
+  method = "rf", 
+  trControl = control
+  )
+```
+
+BestTune
+
+```{r}
+model$bestTune
+```
+
+Variable Importance as barplot
+
+```{r}
+final_model <- model$finalModel
+barplot(randomForest::importance(final_model)[,"IncNodePurity"])
+```
+
+```{r}
+set.seed(2025)
+rf <- randomForest(
+  Anxiety.Level..1.10.~.,
+  data=train_data1_rf,
+  mtry=16,
+  keep.forest=FALSE, #not save each individual CART tree in the output
+  importance=TRUE
+)
+```
+
+### RMSE
+
+```{r}
+sqrt(rf$mse[500])
+```
+
+## XgBoost
+
+```{r}
+dtrain <- xgb.DMatrix(data = X_train, label = y_train)
+dtest <- xgb.DMatrix(data = X_test, label = y_test)
+```
+
+```{r}
+# Train XGBoost
+xgb_model <- xgboost(
+  data = dtrain,
+  nrounds = 500,
+  eta = 0.1,
+  verbose = 0
+)
+```
+
+```{r}
+# Feature importance plot
+importance <- xgb.importance(feature_names = colnames(X_train), model = xgb_model)
+xgb.plot.importance(importance, main = "XGBoost Feature Importance")
+```
+
+Prediction
+
+```{r}
+xgb_preds <- predict(xgb_model, X_test)
+```
+
+RMSE
+
+```{r}
+sqrt(mean((y_test - xgb_preds)^2))
+```
+
+## Comparison
+
+Model Test MSE
+
+-   RF: 1.104186
+
+-   XGB: 1.165522
+
+The reason why RF outperform XGB
+
+-   Number of Features- since XGB used one-hot-encoding so there is a risk of multicolinearity problem which overfit the training data
+
+-   Cross-Validation: since we used cross validation to find the optimal mtry for rf and in XGB, we didn't use CV to tune hyper-parameter. It can result in RF performs better than XGB
+
+# Task 2
+
+## Import Data
+
+```{r}
+data2 <- read.csv("/Users/thomashuang/Downloads/data_2.csv")
+data2$Date = as.Date(data2$Date)
+head(data2)
+```
+
+```{r}
+str(data2)
+```
+
+## 1. Data preprocessing and visualization
+
+```{r}
+ggplot(
+  data2, 
+  aes(x=Date, y = AMZN.Close)
+) + geom_line()
+```
+
+normalization
+
+```{r}
+data2$min_lagged = lag(data2$AMZN.Low)
+data2$max_lagged = lag(data2$AMZN.High)
+
+data2$Close_norm = (data2$AMZN.Close - data2$min_lagged) / (data2$max_lagged -data2$min_lagged)
+```
+
+```{r}
+model_data <- matrix(
+  data2$Close_norm[-1] #excluding volume
+)
+tail(model_data,10)
+```
+
+## 2. Data Splitting
+
+```{r}
+set.seed(2025)
+
+# Create sliding window dataset
+create_dataset <- function(series, timesteps = 10) {
+  x <- list()
+  y <- c()
+  for (i in 1:(length(series) - timesteps)) {
+  x[[i]] <- series[i:(i + timesteps - 1)]
+  y <- c(y, series[i + timesteps])
+  }
+  x_array <- do.call(rbind, x)
+  return(list(x = x_array, y = y))
+}
+
+# Prepare training data
+timesteps <- 10
+
+train_data2 <- model_data[1:(length(model_data)-10)] # training = all except last 10 days
+
+test_data2 <- model_data[(length(model_data)-9):length(model_data)] # true last 10 points
+
+train_set2 <- create_dataset(train_data2, timesteps)
+
+x_train_array <- array(
+  as.numeric(train_set2$x), 
+  dim = c(nrow(train_set2$x), timesteps, 1)
+)
+
+y_train_array <- as.numeric(train_set2$y)
+
+x_train2 <- tf$convert_to_tensor(
+  x_train_array, 
+  dtype = "float32"
+)
+
+y_train2 <- tf$convert_to_tensor(
+  y_train_array, 
+  dtype = "float32"
+)
+
+dim(x_train2)
+```
+
+The dimension of the training data is 569(rows) and 10(columns)
+
+## LSTM
+
+```{r}
+input_lstm <- layer_input(shape = c(timesteps, 1))
+
+output_lstm <- input_lstm %>%
+  layer_lstm(units = 32) %>%
+  layer_dense(units = 1)
+
+model_lstm <- keras_model(inputs = input_lstm, outputs = output_lstm)
+
+model_lstm$compile(
+  loss = "mean_squared_error"
+)
+
+history_lstm <- model_lstm$fit(
+  x = x_train2,
+  y = y_train2,
+  epochs = r_to_py(100L),
+  batch_size = r_to_py(16L),
+  verbose = 0
+)
+```
+
+## RNN
+
+```{r}
+input_rnn <- layer_input(shape = c(timesteps, 1))
+
+output_rnn <- input_rnn %>%
+  layer_simple_rnn(units = 32) %>%
+  layer_dense(units = 1)
+
+model_rnn <- keras_model(inputs = input_rnn, outputs = output_rnn)
+
+model_rnn$compile(
+  loss = "mean_squared_error"
+)
+
+history_rnn <- model_rnn$fit(
+  x = x_train2,
+  y = y_train2,
+  epochs = r_to_py(100L),
+  batch_size = r_to_py(16L),
+  verbose = 0
+)
+```
+
+```{r}
+# Prepare input for forecasting
+input_seq <- model_data[(length(model_data)-10):(length(model_data)-1)] # 10 points before test
+
+input_seq_array <- array(as.numeric(input_seq), dim = c(1, timesteps,1))
+
+input_seq_array <- tf$convert_to_tensor(input_seq_array, dtype = "float32")
+
+# Prediction function
+predict_next <- function(model, input_seq_array, n_steps = 10) {
+  preds <- c()
+  current_input <- input_seq_array
+  for (i in 1:n_steps) {
+    pred <- model$predict(current_input)
+    preds <- c(preds, as.numeric(pred))
+    updated_seq <- c(as.numeric(current_input)[-1], as.numeric(pred))
+    current_input <- array(updated_seq, dim = c(1, timesteps, 1))
+    current_input <- tf$convert_to_tensor(current_input, dtype = "float32")
+  }
+  return(preds)
+}
+```
+
+```{r}
+lstm_preds_norm <- predict_next(
+  model_lstm, 
+  input_seq_array, 
+  n_steps = 10
+)
+```
+
+```{r}
+rnn_preds_norm <- predict_next(
+  model_rnn, 
+  input_seq_array, 
+  n_steps = 10
+)
+```
+
+Scale Back
+
+```{r}
+# Initialize vectors to store scaled-back predictions and true prices
+lstm_preds_original <- numeric(10)
+true_prices_original <- numeric(10)
+rnn_preds_original <- numeric(10)
+
+# Scale back one by one (because each day uses its own lagged High/Low)
+for (i in 1:10) {
+  lagged_min <- data2$AMZN.Low[length(train_data2) + i - 1] # lag(Low) for that day
+  lagged_max <- data2$AMZN.High[length(train_data2) + i - 1] # lag(High) for that day
+  rnn_preds_original[i] <- rnn_preds_norm[i] * (lagged_max - lagged_min) + lagged_min
+  lstm_preds_original[i] <- lstm_preds_norm[i] * (lagged_max - lagged_min) + lagged_min
+  true_prices_original[i] <- data2$AMZN.Close[length(train_data2) + i] # true Close at day
+}
+```
+
+MSE
+
+```{r}
+mse_rnn <- mean((rnn_preds_original - true_prices_original)^2)
+
+mse_lstm <- mean((lstm_preds_original - true_prices_original)^2)
+
+cat("Test MSE (RNN, original scale):", mse_rnn, "\n")
+cat("Test MSE (LSTM, original scale):", mse_lstm, "\n")
+```
+
+Plot 10-Day Forecast (Original Scale)
+
+```{r}
+plot(
+  (length(train_data2)+1):(length(train_data2)+10),
+  true_prices_original,
+  type = 'l', 
+  lwd = 2, 
+  col = 'black', 
+  xlab = "Time Index", 
+  ylab = "Close Price (USD)",
+  main = "10-Day Forecast vs True (Original Scale)"
+)
+
+lines(
+  (length(train_data2)+1):(length(train_data2)+10),
+  rnn_preds_original, 
+  col = 'red', 
+  lwd = 2
+)
+
+lines(
+  (length(train_data2)+1):(length(train_data2)+10),
+  lstm_preds_original, 
+  col = 'blue', 
+  lwd = 2
+)
+
+legend(
+  "bottomleft", 
+  legend = c("True Close", "RNN Prediction", "LSTM Prediction"),
+  col = c("black", "red", "blue"), 
+  lwd = 2
+)
+```
+
+## Comparison
+
+Model Test MSE (Original USD Scale)
+
+-   RNN: 16.05965
+
+-   LSTM: 14.42587
+
+-   LSTM has lower MSE than RNN. LSTM outperforms RNN when predicting actual stock prices.
+
+The reason why LSTM outperform RNN
+
+-   The algorithm difference between LSTM and RNN. LSTM is known to be improvement over RNN because LSTM has separate memory cells and three gates.
+
+-   Vanish/Exploding Gradient Problem, one biggest issue that RNN has
+
+    -   When we train RNN, Gradient can vanish or it can explode, either one would result in bad prediction

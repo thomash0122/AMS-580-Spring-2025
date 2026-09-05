@@ -1,0 +1,125 @@
+---
+title: "AMS 580 Logistic Regression HW"
+author: "Kachun Huang"
+date: "2025-02-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Logistic Regression HW
+
+Logistic Regression (\* A type of Generalized Linear Model) with the Banknote Data The\
+banknote.csv data (see attached) were extracted from images that were taken from\
+genuine and forged banknote-like specimens. Yes, this is a Catch Me if You Can story. For\
+digitization, an industrial camera usually used for print inspection was used. The final\
+images have 400x 400 pixels. Wavelet Transform tool were used to extract features from\
+images. There are 1372 banknotes, and 5 variables:\
+1. variance of Wavelet Transformed image (continuous)\
+2. skewness of Wavelet Transformed image (continuous)\
+3. curtosis of Wavelet Transformed image (continuous)\
+4. entropy of image (continuous)\
+5. class (binary) – this is the response variable of interest, 1 (forged) or 0 (genuine).\
+
+## Import library
+
+```{r}
+library(tidyverse)
+library(caret)
+library(MASS)
+```
+
+## Data Import
+
+```{r}
+banknote <- read.csv("/Users/thomashuang/Downloads/banknote.csv")
+str(banknote)
+```
+
+## Data pre-processing
+
+### Handle Missing Value
+
+```{r}
+banknote <- na.omit(banknote)
+```
+
+### Factor
+
+Since class should be a `factor` type not `int` type, we need to convert from `int` to `factor` .
+
+```{r}
+banknote$class <- factor(banknote$class, levels = c(0,1))
+str(banknote)
+```
+
+## Data Splitting
+
+Please split the data into 80% training and 20% testing using seed =123.
+
+```{r}
+set.seed (123)
+training.samples <- banknote$class %>% createDataPartition(p=0.8, list=FALSE)
+train.data <- banknote[training.samples,]
+test.data <- banknote[-training.samples,]
+```
+
+## Model Fitting
+
+Then you shall fit a logistic regression model with all 4 predictors using the training data.
+
+```{r}
+full.model <- glm(class ~., family = binomial, data = train.data)
+
+summary(full.model)
+```
+
+## Prediction
+
+(c) Please use this fitted model based on the training data to predict the response variable ‘class’ (whether the banknote is forged or not) for the testing data.
+
+```{r}
+pred_prob <- full.model %>% predict (test.data, type="response")
+predicted.classes <- ifelse(pred_prob > 0.5, 1, 0)
+```
+
+## Confusion Matrix
+
+Please generate the confusion matrix, and report: (i) The overall accuracy;
+
+```{r}
+confu_matrix <- confusionMatrix(factor(predicted.classes), factor(test.data$class), positive ="1")
+confu_matrix
+```
+
+When positive class = "1" Detect forged
+
+\| Actual/Predicted \| Negative (Actual 0) \| Positive (Acutal 1) \|
+
+\| Negative (Predicted 0) \| **True Negative (TN)** \| **False Negative(FN)** \|
+
+\| Positive (Predicted 1) \| **False Positive(FP)** \| **True Positive(TP)** \|
+
+## Sensitivity
+
+(ii) The sensitivity (that is, the probability a banknote is predicted to be forged given that it was in fact forged);
+
+```{r}
+confu_matrix$byClass["Sensitivity"]
+```
+
+## Specificity
+
+(iii) The specificity (that is, the probability a banknote is predicted to be genuine given that it was in fact genuine).
+
+```{r}
+confu_matrix$byClass["Specificity"]
+```
+
+## Accuracy
+
+```{r}
+confu_matrix$overall["Accuracy"]
+```

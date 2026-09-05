@@ -1,0 +1,338 @@
+---
+title: "AMS 580 Midterm 1"
+author: "Kachun Huang"
+date: "2025-03-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Exam 1
+
+## Import Library
+
+```{r}
+library(tidyverse)
+library(caret)
+library(neuralnet)
+library(leaps)
+library(bestglm)
+library(MASS)
+library(dplyr)
+```
+
+# Task 1
+
+## Import Data
+
+```{r}
+unknown <- read.csv("/Users/thomashuang/Downloads/Unknown.csv")
+head(unknown)
+```
+
+```{r}
+str(unknown)
+```
+
+## Data Pre-processing
+
+### Remove Missing Values
+
+```{r}
+unknown <- na.omit(unknown)
+head(unknown)
+```
+
+```{r}
+str(unknown)
+```
+
+After cleaning missing values, there are 4621 observations left.
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.sample <- unknown$y %>% createDataPartition(p=0.75, list=FALSE)
+train.data <- unknown[training.sample,]
+test.data <- unknown[-training.sample,]
+```
+
+## NN Model with 1 hidden
+
+```{r}
+nn_one_model_task1 <- neuralnet(
+  y ~.,
+  train.data,
+  hidden = 3,
+  err.fct = "ce",
+  linear.output = FALSE
+)
+```
+
+```{r}
+plot(nn_one_model_task1, rep = "best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_nn_one_task1 <- predict(nn_one_model_task1, test.data)
+pred_nn_one_task1_class <- ifelse(pred_nn_one_task1 > 0.5,1,0)
+```
+
+### Confusion Matrix
+
+```{r}
+cm1 <- confusionMatrix(factor(pred_nn_one_task1_class), factor(test.data$y), positive = "1")
+cm1
+```
+
+### sensitivity
+
+```{r}
+cm1$byClass["Sensitivity"]
+```
+
+### specificity
+
+```{r}
+cm1$byClass["Specificity"]
+```
+
+### overall accuracy
+
+```{r}
+cm1$overall["Accuracy"]
+```
+
+## Logistic Model
+
+```{r}
+log_model <- glm(y ~., data=train.data, family = binomial)
+summary(log_model)
+```
+
+### Predict on Test Data
+
+```{r}
+pred_prob <- log_model %>% predict(test.data, type="response")
+predicted.classes <- ifelse(pred_prob > 0.5, "1", "0")
+```
+
+### Confusion Matrix
+
+```{r}
+cm2 <- confusionMatrix(factor(predicted.classes),factor(test.data$y), positive = "1")
+cm2
+```
+
+### sensitivity
+
+```{r}
+cm2$byClass["Sensitivity"]
+```
+
+### specificity
+
+```{r}
+cm2$byClass["Specificity"]
+```
+
+### overall accuracy
+
+```{r}
+cm2$overall["Accuracy"]
+```
+
+## Write Dataset File
+
+```{r}
+predictions <- data.frame(
+  true_obs = test.data$y,
+  nn_pred = pred_nn_one_task1_class,
+  log_pred = predicted.classes
+)
+agreement_table <- table(predictions$nn_pred, predictions$log_pred)
+agreement_table
+```
+
+### Result
+
+The result said there is a very high agreement rate and low disagreement.
+
+# Task 2
+
+## Import Data
+
+```{r}
+madness <- read.csv("/Users/thomashuang/Downloads/Madness.csv")
+head(madness)
+```
+
+```{r}
+str(madness)
+```
+
+## Data Pre-processing
+
+### Remove Missing Values
+
+```{r}
+madness <- na.omit(madness)
+```
+
+```{r}
+str(madness)
+```
+
+After cleaning, there area 1460 observations left.
+
+### Mean and std
+
+```{r}
+mean <- mean(madness$y)
+print(mean)
+sd <- sd(madness$y)
+print(sd)
+```
+
+### factorize variable
+
+```{r}
+categ_col <- ifelse(madness$x15 == "y", 1, 0)
+```
+
+### Scale the Data
+
+```{r}
+madness <- data.frame(scale(subset(madness, select = -x15)))
+
+madness$x15 <- categ_col
+
+head(madness)
+```
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.sample <- madness$y %>% createDataPartition(p=0.75, list=FALSE)
+train.data <- madness[training.sample,]
+test.data <- madness[-training.sample,]
+```
+
+## NN Model with 1 hidden
+
+```{r}
+nn_one_model_task2 <- neuralnet(
+  y ~.,
+  train.data,
+  hidden = 2,
+  err.fct = "sse",
+  linear.output = TRUE,
+  stepmax = 1e6
+)
+```
+
+### plot
+
+```{r}
+plot(nn_one_model_task2, rep="best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_one_model_task2 <- predict(nn_one_model_task2, test.data)
+```
+
+### Descale
+
+```{r}
+# compute y(unscaled)
+y <- sd * test.data$y + mean
+
+#compute y^hat (unscaled)
+yhat <- pred_one_model_task2*sd+mean
+```
+
+### Compute Test MSE
+
+```{r}
+sum((y-yhat)^2)/length(y)
+```
+
+or
+
+```{r}
+(MSE.nn.1 = RMSE(y,yhat)^2)
+```
+
+## Plot y\^hat and y
+
+```{r}
+plot(y, yhat)
+```
+
+## Linear Regression
+
+```{r}
+# null model
+null <- lm(y ~ 1, data=train.data)
+
+#full model
+full <-lm(y ~. , data=train.data)
+```
+
+### Bidirectional
+
+```{r}
+#find the best model in backward stepwise
+fit_step_both_bic <- stepAIC(full, k = log(nrow(train.data)), trace = 1,direction="both")
+fit_step_both_bic
+```
+
+### Predict on Test Data
+
+```{r}
+pred_stepwise <- predict(fit_step_both_bic, test.data)
+```
+
+### Descale
+
+```{r}
+# compute y(unscaled)
+y <- sd * test.data$y + mean
+
+#compute y^hat (unscaled)
+yhat <- pred_stepwise*sd+mean
+```
+
+### Compute Test MSE
+
+```{r}
+sum((y-yhat)^2)/length(y)
+```
+
+or
+
+```{r}
+(MSE.stepwise = RMSE(y,yhat)^2)
+```
+
+## Plot y\^hat and y
+
+```{r}
+plot(y, yhat)
+```
+
+## Task 2 Result
+
+In the Madness dataset, the stepwise linear regression performs better then neural network with 1 hidden layer and 2 neurons. The possible reason behind this could be
+
+-   Overfitting: with 1 hidden layer and 2 neurons could overfit on the training data and perform worse in testing data
+
+-   Linear Relationship: it is possible that the dataset already explain well in linear model, so neural network might introduces some unnecessary relationship to the model

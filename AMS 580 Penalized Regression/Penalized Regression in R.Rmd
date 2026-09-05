@@ -1,0 +1,393 @@
+---
+title: "Penalized Regression"
+author: "Kachun Huang"
+date: "2025-04-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Penalized Regression in R
+
+## Import libraries
+
+```{r}
+library(glmnet)
+library(caret)
+library(MASS)
+library(tidyverse)
+```
+
+## Model Matrix
+
+```{r eval=FALSE, include=TRUE}
+x <- model.matrix(response ~., train.data)[,-1]
+y <- train.data$response
+```
+
+## Ridge Regression
+
+Ridge regression adds a penalty equal to the square of the magnitude of coefficients, which shrinks the coefficients towards zero but does not set them exactly to zero:
+
+```{r eval=FALSE, include=TRUE}
+# Find the best lambda using cross-validation
+cv.ridge <- cv.glmnet(x, y, alpha = 0)
+```
+
+### Best Lambda 
+
+```{r eval=FALSE, include=TRUE}
+best_lambda <- cv.ridge$lambda.min
+```
+
+### Fit the Model with best lambda
+
+```{r eval=FALSE, include=TRUE}
+# Fit the model with the best lambda
+ridge_model <- glmnet(x, y, alpha = 0, lambda = best_lambda)
+```
+
+#### Display coefficients
+
+```{r eval=FALSE, include=TRUE}
+coef(ridge_model)
+```
+
+## Lasso Regression
+
+Lasso regression uses the L1 penalty, which can shrink some coefficients to exactly zero, effectively performing variable selection:
+
+```{r eval=FALSE, include=TRUE}
+# Find the best lambda using cross-validation
+cv.lasso <- cv.glmnet(x, y, alpha = 1)
+```
+
+### Best Lambda 
+
+```{r eval=FALSE, include=TRUE}
+best_lambda <- cv.lasso$lambda.min
+```
+
+### Fit the Model with best lambda
+
+```{r eval=FALSE, include=TRUE}
+# Fit the model with the best lambda
+lasso_model <- glmnet(x, y, alpha = 1, lambda = best_lambda)
+```
+
+#### Display coefficients
+
+```{r eval=FALSE, include=TRUE}
+coef(lasso_model)
+```
+
+## Elastic Net Regression
+
+Elastic Net combines the properties of both Ridge and Lasso by using both L1 and L2 penalties:
+
+We need to find the optimal $\alpha$ and $\lambda$
+
+```{r eval=FALSE, include=TRUE}
+model <- train(
+  repsonse~.,
+  data = train.data,
+  method = "glmnet",
+  trControl = trainControl("cv", number=10),
+  tuneLength = 10
+)
+```
+
+### Best Alpha and Lambda 
+
+```{r eval=FALSE, include=TRUE}
+model$bestTune
+```
+
+### Fit the Model with best lambda
+
+```{r eval=FALSE, include=TRUE}
+# Fit the model with the best lambda and alpha
+elastic_model <- glmnet(x, y, alpha = best_alpha, lambda = best_lambda)
+```
+
+#### Display coefficients
+
+```{r eval=FALSE, include=TRUE}
+coef(elastic_model)
+```
+
+# Example
+
+## Import Data
+
+```{r}
+data("Boston", package="MASS")
+str(Boston)
+```
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- Boston$medv %>% createDataPartition(p=0.75, list=FALSE)
+train.data <- Boston[training.samples,]
+test.data <- Boston[-training.samples,]
+```
+
+## Model Matrix
+
+```{r}
+x <- model.matrix(medv~., train.data)[,-1] #exclude the last column (medv)
+y <- train.data$medv
+```
+
+## Fit Ridge Regression
+
+```{r}
+cv <- cv.glmnet(
+ x,
+ y,
+ alpha=0
+)
+```
+
+### Best Lambda 
+
+```{r}
+cv$lambda.min
+```
+
+### Fit the Model with best lambda
+
+```{r}
+model <- glmnet(
+  x,
+  y,
+  alpha=0,
+  lambda = cv$lambda.min
+)
+```
+
+#### Model Coefficient
+
+```{r}
+coef(model)
+```
+
+### Prediction
+
+```{r}
+x.test <- model.matrix(medv~., test.data)[,-1]
+pred_ridge <- model %>% predict(x.test) %>% as.vector()
+```
+
+### RMSE and R\^2
+
+```{r}
+data.frame(
+  RMSE = RMSE(pred_ridge, test.data$medv),
+  Rsquare = R2(pred_ridge, test.data$medv)
+)
+```
+
+## Fit Lasso Regression
+
+```{r}
+cv <- cv.glmnet(
+ x,
+ y,
+ alpha=1
+)
+```
+
+### Best Lambda 
+
+```{r}
+cv$lambda.min
+```
+
+### Fit the Model with best lambda
+
+```{r}
+model <- glmnet(
+  x,
+  y,
+  alpha=1,
+  lambda = cv$lambda.min
+)
+```
+
+#### Model Coefficient
+
+```{r}
+coef(model)
+```
+
+### Prediction
+
+```{r}
+x.test <- model.matrix(medv~., test.data)[,-1]
+pred_lasso <- model %>% predict(x.test) %>% as.vector()
+```
+
+### RMSE and R\^2
+
+```{r}
+data.frame(
+  RMSE = RMSE(pred_lasso, test.data$medv),
+  Rsquare = R2(pred_lasso, test.data$medv)
+)
+```
+
+## Fit Elastic Net Regression
+
+```{r}
+model <- train(
+  medv~.,
+  data=train.data,
+  method="glmnet",
+  trControl=trainControl("cv",number=10),
+  tuneLength=10
+)
+```
+
+### Best Alpha and Lambda 
+
+```{r}
+model$bestTune
+```
+
+### Fit the Model with best lambda and alpha
+
+```{r}
+model <- glmnet(
+  x,
+  y,
+  alpha=model$bestTune$alpha,
+  lambda=model$bestTune$lambda
+)
+```
+
+#### Model Coefficient
+
+```{r}
+coef(model)
+```
+
+### Prediction
+
+```{r}
+x.test <- model.matrix(medv~., test.data)[,-1]
+pred_en <- model %>% predict(x.test) %>% as.vector()
+```
+
+### RMSE and R\^2
+
+```{r}
+data.frame(
+  RMSE = RMSE(pred_en, test.data$medv),
+  Rsquare = R2(pred_en, test.data$medv)
+)
+```
+
+## Ridge Regression using train()
+
+```{r}
+set.seed(123)
+
+grid_ridge <- expand.grid(
+  alpha=0,
+  lambda = seq(0.001,0.1, length=100)
+)
+
+model_ridge <- train(
+  medv~.,
+  data=train.data,
+  method="glmnet",
+  metric="RMSE",
+  trConrol=trainControl(method="cv",number=10),
+  tuneGrid=grid_ridge
+)
+```
+
+### Best Tune
+
+```{r}
+model_ridge$bestTune
+```
+
+#### Model Coefficient
+
+```{r}
+coef(model_ridge)
+```
+
+### Prediction
+
+```{r}
+x.test <- model.matrix(medv~., test.data)[,-1]
+pred_ridge <- model_ridge %>% predict(x.test) %>% as.vector()
+```
+
+### RMSE and R\^2
+
+```{r}
+data.frame(
+  RMSE = RMSE(pred_ridge, test.data$medv),
+  Rsquare = R2(pred_ridge, test.data$medv)
+)
+```
+
+## 
+
+## Lasso Regression using train()
+
+```{r}
+set.seed(123)
+
+grid_lasso <- expand.grid(
+  alpha=1,
+  lambda = seq(0.001,0.1, length=100)
+)
+
+model_lasso <- train(
+  medv~.,
+  data=train.data,
+  method="glmnet",
+  metric="RMSE",
+  trConrol=trainControl(method="cv",number=10),
+  tuneGrid=grid_lasso
+)
+```
+
+### Best Tune
+
+```{r}
+model_lasso$bestTune
+```
+
+#### Model Coefficient
+
+```{r}
+coef(model_lasso)
+```
+
+### Prediction
+
+```{r}
+x.test <- model.matrix(medv~., test.data)[,-1]
+pred_lasso <- model_lasso %>% predict(x.test) %>% as.vector()
+```
+
+### RMSE and R\^2
+
+```{r}
+data.frame(
+  RMSE = RMSE(pred_lasso, test.data$medv),
+  Rsquare = R2(pred_lasso, test.data$medv)
+)
+```
+
+## 

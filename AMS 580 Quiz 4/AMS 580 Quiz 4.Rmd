@@ -1,0 +1,371 @@
+---
+title: "AMS 580 Quiz 4"
+author: "Kachun Huang"
+date: "2025-04-07"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Quiz 4
+
+## Import Library
+
+```{r}
+library(dplyr)
+library(caret)
+library(randomForest)
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(caTools)
+```
+
+# Regression Task
+
+## Import Data
+
+```{r}
+house <- read.csv("/Users/thomashuang/Downloads/Ames_Housing_Data.csv")
+head(house)
+```
+
+```{r}
+str(house)
+```
+
+## Remove Missing Values
+
+```{r}
+house <- na.omit(house)
+str(house)
+```
+
+After removing the missing value, there are 1460 obs left.
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- house$SalePrice %>% createDataPartition(p=0.75, list=FALSE)
+train.data <- house[training.samples,]
+test.data <- house[-training.samples,]
+```
+
+## Prune CART
+
+```{r}
+set.seed(123)
+
+model_CART <- train(
+  SalePrice ~., 
+  data = train.data, 
+  method = "rpart",
+  trControl = trainControl("cv", number = 10)
+)
+```
+
+### Access the best tune
+
+```{r}
+model_CART$bestTune
+```
+
+The best CP value is 0.07317
+
+### Plot the best model
+
+```{r}
+fancyRpartPlot(model_CART$finalModel)
+```
+
+### Prediction
+
+```{r}
+pred_CART <- predict(
+  model_CART,
+  test.data
+)
+```
+
+### Test RMSE
+
+```{r}
+RMSE(pred_CART,test.data$SalePrice)
+```
+
+## Best Random Forest
+
+```{r}
+set.seed(123)
+
+# 10-fold CV
+control <- trainControl(
+  method = "cv", 
+  number = 10
+  )
+
+# train the rf using 10-fold CV
+model_rf <- train(
+  SalePrice~., 
+  data = train.data, 
+  method = "rf", 
+  trControl = control
+  )
+
+print(model_rf)
+```
+
+### Access bestTune
+
+```{r}
+print(model_rf$bestTune)
+```
+
+The best mtry value is 10
+
+### Plot importance measures
+
+```{r}
+varImpPlot(model_rf$finalModel)
+```
+
+### Prediction
+
+```{r}
+pred_rf <- predict(
+  model_rf,
+  newdata = test.data
+)
+```
+
+### Test RMSE
+
+```{r}
+RMSE(pred_rf, test.data$SalePrice)
+```
+
+## Which is better?
+
+The Test RMSE of CART is 50958.41
+
+The Test RMSE of Random Forest is 37341
+
+In terms of test RMSE, random forest performs better than CART.
+
+The possible reasons of random forest performs better than CART are
+
+-   CART generally overfit on training data, result in high rmse when evaluate with test data
+
+-   Random Forest performs better because of its algorithm
+
+    -   by aggregating all the prediction of all tree created from bootstrap sample
+
+    -   It allows the model to foresee unseen data, so lower the rmse when evaluate with test data
+
+# Classification Task
+
+## Import Data
+
+```{r}
+titanic <- read.csv("/Users/thomashuang/Downloads/Titanic.csv")
+```
+
+```{r}
+head(titanic)
+```
+
+```{r}
+str(titanic)
+```
+
+## Exclude some columns
+
+```{r}
+titanic <- subset(titanic, select = -c(PassengerId, Name, Ticket, Cabin))
+```
+
+```{r}
+str(titanic)
+```
+
+## Remove Missing Values
+
+```{r}
+titanic <- na.omit(titanic)
+str(titanic)
+```
+
+## Factorize Column
+
+```{r}
+titanic$Survived <- as.factor(titanic$Survived)
+titanic$Pclass <- as.factor(titanic$Pclass)
+```
+
+```{r}
+str(titanic)
+```
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- titanic$Survived %>% createDataPartition(p=0.75, list=FALSE)
+train.data <- titanic[training.samples,]
+test.data <- titanic[-training.samples,]
+```
+
+## Prune CART
+
+```{r}
+set.seed(123)
+
+model_CART_c <- train(
+  Survived ~., 
+  data = train.data, 
+  method = "rpart",
+  trControl = trainControl("cv", number = 10)
+)
+```
+
+### Access the best tune
+
+```{r}
+model_CART_c$bestTune
+```
+
+The best CP value is 0.01376147
+
+### Plot the best model
+
+```{r}
+fancyRpartPlot(model_CART_c$finalModel)
+```
+
+### Prediction
+
+```{r}
+pred_CART_c <- predict(
+  model_CART_c,
+  test.data
+)
+```
+
+### Confusion Matrix
+
+```{r}
+cm1 <- confusionMatrix(
+  factor(pred_CART_c),
+  factor(test.data$Survived),
+  positive = "1"
+)
+cm1
+```
+
+#### Sensitivity
+
+```{r}
+cm1$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm1$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm1$overall["Accuracy"]
+```
+
+## Best Random Forest
+
+```{r}
+set.seed(123)
+# 10-fold CV
+control <- trainControl(
+  method = "cv", 
+  number = 10
+  )
+
+# train the rf using 10-fold CV
+model_rf_c <- train(
+  Survived ~ ., 
+  data = train.data, 
+  method = "rf", 
+  trControl = control, 
+  importance = TRUE
+  )
+
+print(model_rf_c)
+```
+
+### Access bestTune
+
+```{r}
+model_rf_c$bestTune
+```
+
+The best mtry is 2
+
+### Plot importance measures
+
+```{r}
+varImpPlot(model_rf_c$finalModel)
+```
+
+### Prediction
+
+```{r}
+pred_rf_c <- predict(
+  model_rf_c,
+  newdata = test.data
+)
+```
+
+### Confusion Matrix
+
+```{r}
+cm2 <- confusionMatrix(
+  pred_rf_c,
+  test.data$Survived,
+  positive = "1"
+)
+cm2
+```
+
+#### Sensitivity
+
+```{r}
+cm2$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm2$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm2$overall["Accuracy"]
+```
+
+## Which is better?
+
+In terms of sensitivity, Random Forest is better
+
+In terms of specificity, CART is beter
+
+In terms of overall accuracy, CART is better
+
+The reason behind the difference in performance:
+
+-   Generally Random Forest relies on sub-seting random features to create multiple CART model. This dataset only has 7 features, so the Random Forest doesn't get much exposure to more diverse data.

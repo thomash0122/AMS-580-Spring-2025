@@ -1,0 +1,305 @@
+---
+title: "AMS 580 Quiz 3"
+author: "Kachun Huang"
+date: "2025-03-10"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Quiz 3
+
+## Import Library
+
+```{r}
+library(neuralnet)
+library(MASS)
+library(tidyverse)
+library(caret)
+library(dplyr)
+```
+
+# Task 1
+
+## Data Import
+
+```{r}
+data("airquality")
+data <- airquality
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+## Data Pre-processing
+
+### remove missing values
+
+```{r}
+data <- na.omit(data)
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+After removing missing values, there are 111 observations left.
+
+### Compute mean and std
+
+```{r}
+mean <- mean(data$Ozone)
+print(mean)
+sd <- sd(data$Ozone)
+print(sd)
+```
+
+### Scale the data
+
+```{r}
+data <- data.frame(scale(data))
+head(data)
+```
+
+```{r}
+str(data)
+```
+
+### Data Splitting
+
+```{r}
+set.seed(123)
+training.sample <- data$Ozone %>% createDataPartition(p=0.8, list=FALSE)
+train.data <- data[training.sample,]
+test.data <- data[-training.sample,]
+```
+
+## NN with no hidden layer
+
+```{r}
+nn_no_model <- neuralnet(
+  Ozone ~.,
+  train.data,
+  hidden = 0,
+  err.fct = "sse",
+  linear.output = TRUE
+)
+```
+
+### plot
+
+```{r}
+plot(nn_no_model, rep="best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_nn_no <- predict(nn_no_model, test.data)
+```
+
+### Descale
+
+```{r}
+# compute y(unscaled)
+y <- sd * test.data$Ozone + mean
+#compute y^hat (unscaled)
+yhat <- pred_nn_no*sd+mean
+```
+
+### Compute Test MSE
+
+```{r}
+sum((y-yhat)^2)/length(y)
+```
+
+or
+
+```{r}
+(MSE.nn.0 = RMSE(y,yhat)^2)
+```
+
+## NN with one hidden layer
+
+```{r}
+nn_one_model <- neuralnet(
+  Ozone ~.,
+  train.data,
+  hidden = 3,
+  err.fct = "sse",
+  linear.output = TRUE
+)
+```
+
+### plot
+
+```{r}
+plot(nn_one_model, rep="best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_nn_one <- predict(nn_one_model, test.data)
+```
+
+### Descale
+
+```{r}
+# compute y(unscaled)
+y <- sd * test.data$Ozone + mean
+
+#compute y^hat (unscaled)
+yhat <- pred_nn_one*sd+mean
+```
+
+### Compute Test MSE
+
+```{r}
+sum((y-yhat)^2)/length(y)
+```
+
+or
+
+```{r}
+(MSE.nn.1 = RMSE(y,yhat)^2)
+```
+
+## Result
+
+The model with no hidden layer is better than the model with one hidden layer by test MSE. The possible reason could be the relationship is closer to linear so adding extra layer which introduce nonlinear could either overfit or it doesn't fit well.
+
+# Task 2
+
+## Data Import
+
+```{r}
+titantic <- read.table("/Users/thomashuang/Downloads/Titanic2.csv", header=TRUE, sep=",")
+head(titantic)
+```
+
+```{r}
+str(titantic)
+```
+
+## Data Pre-processing
+
+### Subset
+
+```{r}
+titantic <- subset(titantic, select = c(Pclass, Sex, Age, Survived))
+head(titantic)
+```
+
+```{r}
+str(titantic)
+```
+
+### remove missing values
+
+```{r}
+titantic <- na.omit(titantic)
+head(titantic)
+```
+
+```{r}
+str(titantic)
+```
+
+After remove the missing values, there are 714 observations left.
+
+### Dummy Variable
+
+```{r}
+titantic$Sex <- ifelse(titantic$Sex == 'male', 1, 0)
+head(titantic)
+```
+
+### Data Splitting
+
+```{r}
+set.seed(123)
+training.sample <- titantic$Survived %>% createDataPartition(p=0.8, list=FALSE)
+train.data <- titantic[training.sample,]
+test.data <- titantic[-training.sample,]
+```
+
+## NN with no hidden layer
+
+```{r}
+nn_no_model_c <- neuralnet(
+  Survived ~.,
+  train.data,
+  hidden = 0,
+  err.fct = "sse",
+  linear.output = FALSE
+)
+```
+
+### plot
+
+```{r}
+plot(nn_no_model_c, rep="best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_nn_no_c <- predict(nn_no_model_c, test.data)
+pred_nn_no_c_class <- ifelse(pred_nn_no_c > 0.5,1,0)
+```
+
+### Confusion Matrix
+
+```{r}
+cm1 <- confusionMatrix(factor(pred_nn_no_c_class), factor(test.data$Survived), positive = "1")
+cm1
+```
+
+## NN with one hidden layer
+
+```{r}
+nn_one_model_c <- neuralnet(
+  Survived ~.,
+  train.data,
+  hidden = 3,
+  err.fct = "ce",
+  linear.output = FALSE
+)
+```
+
+### plot
+
+```{r}
+plot(nn_one_model_c, rep="best")
+```
+
+### Predict on Test Data
+
+```{r}
+pred_nn_one_c <- predict(nn_one_model_c, test.data)
+pred_nn_one_c_class <- ifelse(pred_nn_one_c > 0.5,1,0)
+```
+
+### Confusion Matrix
+
+```{r}
+cm2 <- confusionMatrix(factor(pred_nn_one_c_class), factor(test.data$Survived), positive = "1")
+cm2
+```
+
+## Result
+
+-   In terms of overall accuracy: model with no hidden layer is better.
+
+-   In terms of Sensitivity: model with no hidden layer is better.
+
+-   In terms of Specificity: model with one hidden layer is better.

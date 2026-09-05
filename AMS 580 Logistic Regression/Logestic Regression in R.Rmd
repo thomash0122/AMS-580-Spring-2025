@@ -1,0 +1,396 @@
+---
+title: "Logistic Regression in R"
+author: "Kachun Huang"
+date: "2025-02-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Logistic Regression in R
+
+The logistic distribution constrains the estimated probabilities to lie between 0 and 1.
+
+The estimated probability is:
+
+$$
+p = \frac{1}{1+e^{-\alpha-\beta X}}
+$$
+
+-   If you let $\alpha+\beta X = 0$ , then $p=0.5$
+
+-   as $\alpha+\beta X = 0$ gets really big, p approaches to 1
+
+-   as $\alpha+\beta X = 0$ gets really small, p approaches to 0
+
+## Logistic Transformation
+
+the **logistic model** (or **logit model**) is a statistical model that models the log-odds of an event as a linear combination of one or more independent variables.
+
+$$
+log(\frac{p}{1-p}) = \alpha + \beta X
+$$
+
+where,
+
+-   $log(\frac{p}{1-p})$ is the log odds range from $(-\infty,\infty)$
+
+## Perform fitting in R
+
+The `glm()` function fits generalized linear models, a class of models that includes logistic regression.
+
+The syntax of the `glm()` function is similar to that of `lm()`,except that we must pass in the argument `family=binomial` in order to tell R to run a logistic regression rather than some other type of generalized linear model.
+
+*syntax:*
+
+```{r eval=FALSE, include=TRUE}
+fit <- glm(
+  response ~ pred1 + pred2 + ...,
+  family = binomial,
+  data = data_name
+)
+```
+
+## Coefficients
+
+There are 2 ways to access the coefficients of the logistic model:
+
+-   `coef()`- access just the coefficients of the fitted model
+
+-   `summary()` - access the full summary information of the fitted model
+
+*syntax:*
+
+```{r eval=FALSE, include=TRUE}
+#with coef()
+coef(fit)
+```
+
+```{r eval=FALSE, include=TRUE}
+#with summary()
+summary(fit)$coef
+
+#If just need the estimated parameter
+summary(fit)$coef[,4]
+```
+
+## Prediction
+
+The `predict()` function can be used to make prediction using the fitted model, given values of the predictors.
+
+The `type="response"` option tells R to output probabilities of the form $P(Y=1|X)$ to other information such as the logit.
+
+*syntax:*
+
+```{r eval=FALSE, include=TRUE}
+# find Y hat of each x
+pred_fit <- predict(fit, type="repsonse)
+```
+
+```{r eval=FALSE, include=TRUE}
+new_data <- dataframe(column1 = ..., column2= ..., column3=...)
+# find Y hat of a given X
+pred_fit <- predict(fit, new_data, type="repsonse")
+```
+
+## Confusion Matrix
+
+A confusion matrix is a table used to evaluate the performance of a classification model by comparing predicted vs. actual values. It provides a breakdown of correct and incorrect predictions across different classes.
+
+When positive class = "0" Detect negative
+
+\| Actual/Predicted \| Positive (Actual 0) \| Negative (Actual 1) \|
+
+\| Positive (Predicted 0) \| **True Positive(TP)** \| **False Positive(FP)** \|
+
+\| Negative (Predicted 1) \| **False Negative(FN)** \| **True Negative (TN)** \|
+
+When positive class = "1" Detect positive
+
+\| Actual/Predicted \| Negative (Actual 0) \| Positive (Acutal 1) \|
+
+\| Negative (Predicted 0) \| **True Negative (TN)** \| **False Negative(FN)** \|
+
+\| Positive (Predicted 1) \| **False Positive(FP)** \| **True Positive(TP)** \|
+
+**Build from scratch:**
+
+*syntax:*
+
+```{r eval=FALSE, include=TRUE}
+# For positive class = "0" and negative class = "1"
+#create predicted class
+predicted.classes <- ifelse(pred_fit > 0.5, "neg", "pos")
+
+#create confusion matrix
+table(predicted.classes,data$response)
+```
+
+```{r eval=FALSE, include=TRUE}
+# For positive class = "1" and negative class = "0"
+#create predicted class
+predicted.classes <- ifelse(pred_fit > 0.5, "pos", "neg")
+
+#create confusion matrix
+table(predicted.classes,data$response)
+```
+
+**Built-in function:**
+
+*syntax:*
+
+```{r eval=FALSE, include=TRUE}
+# For positive class = "0" and negative class = "1"
+confusionMatrix(factor(predicted.classes), factor(data$response), positive ="0")
+```
+
+```{r eval=FALSE, include=TRUE}
+# For positive class = "1" and negative class = "0"
+confusionMatrix(factor(predicted.classes), factor(data$response), positive ="1")
+```
+
+## Model Accuracy
+
+To evaluate the overall model accuracy, we need to calculate
+
+$P(\text{Predicted Correctly}) = \frac{TP+TN}{TP+TN+FP+FN}$
+
+-   **(\# of sample predicted Y=1 correctly + \# of sample predicted Y=1 correctly)** is corresponding to the **sum of the diagonal of confusion matrix**
+
+To do this efficiently in R:
+
+```{r eval=FALSE, include=TRUE}
+mean(predicted.classes == data$response)
+```
+
+## Sensitivity
+
+**Sensitivity** (also called the **true positive rate**, or the **recall** in some fields) measures the proportion of actual positives which are correctly identified as such (e.g., the percentage of sick people who are correctly identified as having the condition), and is complementary to the false negative rate.
+
+$Sensitivity= P(\text{true positive}|\text{correct}) = \frac{TP}{TP+FN}$
+
+To do this efficiently in R, we can access from the confusionMatrix()
+
+```{r eval=FALSE, include=TRUE}
+
+```
+
+## Specificity
+
+**Specificity** (also called the **true negative rate**) measures the proportion of negatives which are correctly identified as such (e.g., the percentage of healthy people who are correctly identified as not having the condition), and is complementary to the false positive rate.
+
+$Specificity= P(\text{true negative}|\text{correct})=\frac{TN}{TN+FP}$
+
+## Precision
+
+precision is **a metric that measures how well a model predicts positive outcomes**. It's calculated by dividing the number of true positives by the total number of positive predictions.
+
+$Precision = P(\text{true positiv}|\text{ actaully positive})=\frac{TP}{TP+FP}$
+
+## F1
+
+the **F1 score** is a measure of predictive performance. It is calculated from the precision and recall of the test, where the precision is the number of true positive results divided by the number of all samples predicted to be positive, including those not identified correctly, and the recall is the number of true positive results divided by the number of all samples that should have been identified as positive. 
+
+$$
+F_1 = 2 * \frac{Precision*Recall}{Precision + Recall}
+$$
+
+## Compare models
+
+One of the most important differences between logistic regression and linear regression is in how we compare models.\
+• For linear regression, we looked at how the adjusted R2 changed. If there was a\
+significant increase when we added another variable (or interaction) then we thought the\
+model had improved.\
+• For logistic regression, we use likelihood-ratio test
+
+```{r eval=FALSE, include=TRUE}
+#import lmtest library
+library(lmtest)
+
+#use likelihood test
+lrtest(submodel, fullmodel)
+```
+
+# Example
+
+```{r}
+library(mlbench)
+library(tidyverse)
+library(caret)
+```
+
+## Data Import
+
+```{r}
+#import data from mlbench
+data("PimaIndiansDiabetes2", package= "mlbench")
+```
+
+**Data Description:**
+
+The 9 variables of the pimaindiansdiabetes2 tbl data frame are the following ones:
+
+-   **pregnant**- Number of times pregnant (numeric);
+
+-   **glucose**- Plasma glucose concentration a 2 hours in an oral glucose tolerance test (numeric);
+
+-   **pressure**- Diastolic blood pressure (mm Hg) (numeric);
+
+-   **triceps**- Triceps skin fold thickness (mm) (numeric);
+
+-   **insulin**- 2-Hour serum insulin (mu U/ml)(numeric);
+
+-   **mass**- Body mass index (weight in kg/(height in m)ˆ2) (numeric);
+
+-   **pedigree**- Diabetes pedigree function (numeric);
+
+-   **age**- Age (years) (numeric);
+
+-   **diabetes**- class variable: diabetic or not (factor with 2 levels: neg and pos
+
+```{r}
+dim(PimaIndiansDiabetes2)
+```
+
+```{r}
+head(PimaIndiansDiabetes2)
+```
+
+## Data Cleaning
+
+```{r}
+#omit missing values
+PimaIndiansDiabetes2 <- na.omit(PimaIndiansDiabetes2)
+```
+
+```{r}
+dim(PimaIndiansDiabetes2)
+```
+
+```{r}
+head(PimaIndiansDiabetes2)
+```
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- PimaIndiansDiabetes2$diabetes %>% createDataPartition(p=0.8, list=FALSE)
+train.data <- PimaIndiansDiabetes2[training.samples,]
+test.data <- PimaIndiansDiabetes2[-training.samples,]
+```
+
+## Model fitting
+
+```{r}
+#fit the model
+fit <- glm(diabetes ~., data=train.data, family = binomial)
+
+#summary
+summary(fit)
+```
+
+## Model prediction
+
+```{r}
+# find Y hat of each x
+pred_prob <- fit %>% predict(test.data, type="response")
+```
+
+## Confusion Matrix
+
+From scratch
+
+```{r}
+#create predicted class
+predicted.classes <- ifelse(pred_prob > 0.5, "pos", "neg")
+
+#create confusion matrix
+table(predicted.classes,test.data$diabetes)
+```
+
+Built-in function
+
+```{r}
+cm <- confusionMatrix(factor(predicted.classes),factor(test.data$diabetes), positive = "pos")
+cm
+```
+
+When positive class = "1" Detect positive
+
+\| Actual/Predicted \| Negative (Actual 0) \| Positive (Acutal 1) \|
+
+\| Negative (Predicted 0) \| **True Negative (TN)** \| **False Negative(FN)** \|
+
+\| Positive (Predicted 1) \| **False Positive(FP)** \| **True Positive(TP)** \|
+
+**Correct:**
+
+-   Out of 55 sample predicted "neg", 44 predicted "neg" correctly
+
+-   Out of 23 sample predicted "pos", 15 predicted "pos" correctly
+
+**Wrong:**
+
+-   Out of 55 sample predicted "neg", 11 predicted "neg" incorrectly (should be "pos")
+
+-   Out of 23 sample predicted "pos", 8 predicted "pos" incorrectly (should be "neg")
+
+## Model Accuracy
+
+Use R:
+
+```{r}
+#Model Accuracy
+cm$overall["Accuracy"]
+```
+
+Manual Calculation:
+
+$P(\text{predicted correctly}) = \frac{\text{num of sample predicted "neg" correctly} + \text{num of sample predicted "pos" correctly}}{\text{Total num of sample}}$
+
+```{r}
+(44+15)/(44+11+8+15)
+```
+
+## Sensitivity
+
+Use R:
+
+```{r}
+cm$byClass["Sensitivity"]
+```
+
+$Sensitivity= P(\text{predicted positive}|\text{positive})$
+
+Manual Calculation
+
+```{r}
+sen <- 15/(11+15)
+sen
+```
+
+## Specificity
+
+Use R:
+
+```{r}
+cm$byClass["Specificity"]
+```
+
+$Specificity= P(\text{predicted negative}|\text{negative})$
+
+Manual Calculation
+
+```{r}
+spec <- 44/(44+8)
+spec
+```
+
+## F1 Score
+
+```{r}
+cm$byClass["F1"]
+```

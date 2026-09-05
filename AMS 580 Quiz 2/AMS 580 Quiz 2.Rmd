@@ -1,0 +1,173 @@
+---
+title: "AMS 580 Quiz 2"
+author: "Kachun Huang"
+date: "2025-02-26"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Quiz Logistic Regression
+
+## Library
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(leaps)
+library(car)
+library(caret)
+library(dplyr)
+library(lmtest)
+```
+
+## Data import
+
+```{r}
+titantic <- read.table("/Users/thomashuang/Downloads/Titanic2.csv", sep = ",",header=TRUE)
+head(titantic)
+```
+
+```{r}
+str(titantic)
+```
+
+## Data pre-processing
+
+```{r}
+#exlcude particular columns
+titantic <- subset(titantic, select = -c(PassengerId,Name,Ticket,Cabin))
+str(titantic)
+```
+
+```{r}
+#omit missing values
+titantic <- na.omit(titantic)
+str(titantic)
+```
+
+```{r}
+#factorize survivied and Pclass column
+titantic$Survived <- factor(titantic$Survived)
+titantic$Pclass <- factor(titantic$Pclass)
+str(titantic)
+```
+
+After cleaning, there are only 714 observations left.
+
+## Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- titantic$Survived %>% createDataPartition(p=0.8, list=FALSE)
+train.data <- titantic[training.samples,]
+test.data <- titantic[-training.samples,]
+```
+
+## Model fitting
+
+```{r}
+#fit the model
+fit <- glm(Survived ~., data=train.data, family = binomial)
+
+#summary
+summary(fit)
+```
+
+## Confusion Matrix
+
+#### Manual Calculation
+
+```{r}
+# find Y hat of each x
+pred_prob <- fit %>% predict(test.data, type="response")
+
+#create predicted class
+predicted.classes <- ifelse(pred_prob > 0.5, "survived", "dead")
+
+test.data$Survived <- ifelse(test.data$Survived == 1, "survived", "dead")
+
+#confusion matrix 
+table(predicted.classes,test.data$Survived)
+```
+
+#### Built-in Function
+
+```{r}
+cm <- confusionMatrix(factor(predicted.classes),factor(test.data$Survived), positive = "survived")
+```
+
+When positive class = "1" Detect survived
+
+\| Actual/Predicted \| Negative (Actual 0) \| Positive (Acutal 1) \|
+
+\| Negative (Predicted 0) \| **True Negative (TN)** \| **False Negative(FN)** \|
+
+\| Positive (Predicted 1) \| **False Positive(FP)** \| **True Positive(TP)** \|
+
+### Overall accuracy
+
+$P(\text{Predicted Correctly}) = \frac{TP+TN}{TP+TN+FP+FN}$
+
+```{r}
+(71+43)/(71+15+13+43)
+```
+
+```{r}
+cm$overall["Accuracy"]
+```
+
+### Sensitivity
+
+$Sensitivity= P(\text{true positive}|\text{correct}) = \frac{TP}{TP+FN}$
+
+```{r}
+(43)/(43+15)
+```
+
+```{r}
+cm$byClass["Sensitivity"]
+```
+
+### Specificity
+
+$Specificity= P(\text{true negative}|\text{correct})=\frac{TN}{TN+FP}$
+
+```{r}
+(71)/(13+71)
+```
+
+```{r}
+cm$byClass["Specificity"]
+```
+
+## Prediction
+
+```{r}
+new_data <- data.frame(
+  Pclass = factor(c(3,1,2)),
+  Sex = c("male","female","male"),
+  Age = c(24,68,41),
+  SibSp = c(1,0,1),
+  Parch = c(0,0,2),
+  Fare = c(8.42,24.34,41.93),
+  Embarked=c("Q","C","S")
+)
+new_data
+```
+
+```{r}
+# find Y hat of a given X
+pred_fit <- predict(fit, new_data, type="response")
+pred_fit
+result <- ifelse(pred_fit > 0.5, "survived","dead")
+result
+```
+
+-   Passenger ID 892 will not survived.
+
+-   Passenger ID 893 will survived.
+
+-   Passenger ID 894 will no survived

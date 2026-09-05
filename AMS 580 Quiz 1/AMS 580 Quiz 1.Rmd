@@ -1,0 +1,221 @@
+---
+title: "AMS 580 Quiz 1"
+author: "Kachun Huang"
+date: "2025-02-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Quiz 1
+
+```{r}
+library(MASS)
+library(tidyverse)
+library(leaps)
+library(car)
+library(caret)
+library(dplyr)
+```
+
+## Data Import
+
+```{r}
+house <- read.table("/Users/thomashuang/Downloads/Ames_Housing_Data.csv", sep=",",header=TRUE)
+```
+
+```{r}
+head(house)
+```
+
+```{r}
+#remove Id column
+house <- subset(house, select = -c(Id))
+
+head(house)
+```
+
+## Data Split
+
+```{r}
+set.seed(123)
+training.samples <- house$SalePrice %>% createDataPartition(p=0.75,list = FALSE)
+train.data <- house[training.samples, ]
+test.data <- house[-training.samples, ]
+```
+
+## Step-wise BIC
+
+```{r}
+# null model
+null <- lm(SalePrice ~ 1, data=train.data)
+
+#full model
+full <-lm(SalePrice ~. , data=train.data)
+```
+
+### Forward
+
+```{r}
+#find the best model in forward stepwise
+fit_step_fwd_bic <- stepAIC(null, scope = list (lower = null, upper = full),
+direction = "forward", k = log(nrow(train.data)), trace = 1)
+```
+
+```{r}
+#display the BIC
+BIC(fit_step_fwd_bic)
+```
+
+### Backward
+
+```{r}
+#find the best model in backward stepwise
+fit_step_back_bic <- stepAIC(full, k = log(nrow(train.data)), trace = 1,direction = "backward")
+fit_step_back_bic
+```
+
+```{r}
+#display the BIC 
+BIC(fit_step_back_bic)
+```
+
+### Both
+
+```{r}
+#find the best model in backward stepwise
+fit_step_both_bic <- stepAIC(full, k = log(nrow(train.data)), trace = 1,direction="both")
+fit_step_both_bic
+```
+
+```{r}
+#display the BIC 
+BIC(fit_step_both_bic)
+```
+
+### Step-wise Result
+
+Since Backward yield the smallest BIC.
+
+### Coefficients
+
+```{r}
+summary(fit_step_back_bic)$coefficients[,1]
+```
+
+### RMSE and R\^2
+
+```{r}
+pred_step_back_bic <- fit_step_back_bic %>% predict(test.data)
+data_frame(
+  RMSE = RMSE(pred_step_back_bic, test.data$SalePrice),
+  Rsquare = R2(pred_step_back_bic, test.data$SalePrice)
+)
+```
+
+## Best Subset SSE
+
+```{r}
+# use best subset to find the model
+fit_bs <- regsubsets(SalePrice ~., data=train.data, nvmax = 30)
+
+#save summary
+result <- summary(fit_bs)
+```
+
+```{r}
+#display the sse of each model candidate
+result$rss
+```
+
+```{r}
+#find which model that have the least sse
+which.min(result$rss)
+```
+
+```{r}
+#sse of the 18th model
+result$rss[18]
+```
+
+From this, we know the best model based on the SSE criterion is the model with 18 predictors.
+
+```{r}
+result$which[18,]
+```
+
+The result above indicate that the full model has the lowest SSE of 1.16219e+12.
+
+### Coefficients
+
+```{r}
+#fit the full model
+fit_full <- lm(SalePrice ~. , data=train.data)
+
+#the coefficient of full model
+summary(fit_full)$coefficients[,1]
+```
+
+### RMSE and R\^2
+
+```{r}
+pred_full <- fit_full %>% predict(test.data)
+data_frame(
+  RMSE = RMSE(pred_full, test.data$SalePrice),
+  Rsquare = R2(pred_full, test.data$SalePrice)
+)
+```
+
+## Which is the best?
+
+Which model selection method among the 2 we have used above is the best?
+
+Step-wise selection method performs the best.
+
+(a) Please compare the BIC of these models using the training data, as well as display these two models so we can see the parameter estimators and model goodness of fit measures.
+
+```{r}
+#Stepwise best BIC
+BIC(fit_step_back_bic)
+```
+
+```{r}
+#Stepwise best summary
+summary(fit_step_back_bic)
+```
+
+```{r}
+#best subset best BIC
+BIC(full)
+```
+
+```{r}
+#best subset best
+summary(full)
+```
+
+(b) Furthermore, please compare the RMSE and R2 of these models using the test data.
+
+```{r}
+# RMSE and R2 of step-wise
+pred_step_back_bic <- fit_step_back_bic %>% predict(test.data)
+data_frame(
+  RMSE = RMSE(pred_step_back_bic, test.data$SalePrice),
+  Rsquare = R2(pred_step_back_bic, test.data$SalePrice)
+)
+```
+
+```{r}
+# RMSE and R2 of best subset
+pred_full <- fit_full %>% predict(test.data)
+data_frame(
+  RMSE = RMSE(pred_full, test.data$SalePrice),
+  Rsquare = R2(pred_full, test.data$SalePrice)
+)
+```
+
+(c) Please discuss any modifications you can do to further improve your model(s).
+
+For improvement, I won't use SSE criterion for model selection since full model generally has the least SSE which doesn't account for model complexity.

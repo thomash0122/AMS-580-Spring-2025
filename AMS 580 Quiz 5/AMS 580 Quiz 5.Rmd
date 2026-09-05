@@ -1,0 +1,498 @@
+---
+title: "AMS 580 Quiz 5"
+author: "Kachun Huang"
+date: "2025-04-23"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# AMS 580 Quiz 5
+
+## Import Library
+
+```{r message=FALSE}
+library(factoextra)
+library(stats)
+library(cluster)
+library(ggplot2)
+library(caret)
+library(ggbiplot)
+library(tidyverse)
+library(kernlab)
+library(e1071)
+```
+
+## Import Data
+
+```{r}
+data <- read.csv("/Users/thomashuang/Downloads/GreatUnknown.csv")
+str(data)
+```
+
+## Data Pre-processing
+
+### scale
+
+```{r}
+data <- na.omit(data)
+y <- factor(data$y)
+data <- scale(subset(data,select=-c(y)))
+data <- as.data.frame(cbind(data,y))
+str(data)
+```
+
+### Factorize Response
+
+```{r}
+data$y <- factor(data$y)
+str(data)
+```
+
+### Data Splitting
+
+```{r}
+set.seed(123)
+training.samples <- data$y %>% createDataPartition(p = 0.75, list = FALSE)
+train.data <- data[training.samples, ]
+test.data <- data[-training.samples, ]
+```
+
+## CA
+
+### K-means with k=2
+
+```{r}
+train.data_km <- subset(train.data, select=-c(y))
+km_2 <- kmeans(train.data_km, centers = 2, nstart = 25)
+```
+
+#### Scree plot
+
+```{r}
+fviz_nbclust(train.data_km, kmeans, method = "wss")
+```
+
+#### 2D Cluster
+
+```{r}
+clusplot(
+  train.data_km,
+  km_2$cluster,
+  main = "K-means Clustering",
+  color = TRUE,
+  shade = TRUE,
+  labels = 2,
+  lines = 0
+)
+```
+
+#### Confusion Matrix
+
+```{r}
+table(
+  factor(km_2$cluster),
+  train.data$y
+)
+```
+
+```{r}
+clusters <- factor(
+  km_2$cluster, 
+  levels = c(1,2)
+)
+
+cm_k <- confusionMatrix(
+  clusters,
+  train.data$y
+)
+cm_k
+```
+
+#### Sensitivity
+
+```{r}
+cm_k$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_k$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_k$overall["Accuracy"]
+```
+
+### Hierarchical Clustering
+
+#### Distance Matrix
+
+```{r}
+d <- dist(
+  train.data,
+  method = "euclidean"
+)
+```
+
+#### Ward.D
+
+```{r}
+
+H.fit <- hclust(
+  d,
+  method = "ward.D"
+)
+
+plot(H.fit)
+
+rect.hclust(
+  H.fit, 
+  k=2, 
+  border = "red"
+)
+```
+
+#### 2D Cluster Plot
+
+```{r}
+
+groups <- cutree(
+  H.fit,
+  k=2
+)
+
+clusplot(
+  train.data,
+  groups,
+  main = "2D representation of the Cluster solution",
+  color = TRUE,
+  shade = TRUE,
+  labels = 2,
+  lines = 0
+)
+```
+
+#### Confusion Matrix
+
+```{r}
+table(
+  train.data$y,
+  groups
+)
+```
+
+```{r}
+clusters <- factor(
+  groups, 
+  levels =c(1,2)
+)
+
+cm_h <- confusionMatrix(
+  train.data$y,
+  clusters
+)
+cm_h
+```
+
+#### Sensitivity
+
+```{r}
+cm_h$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_h$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_h$overall["Accuracy"]
+```
+
+## Result
+
+In terms of confusion matrix, Hierarchical Clustering performs better.
+
+K means has very low specificity. So overall is Hierarchical Clustering performs better
+
+## PCA
+
+### Data Pre-processing
+
+#### remove y from training
+
+```{r}
+train.data_pca <- subset(train.data,select=-c(y))
+```
+
+### Compute PC
+
+```{r}
+data.pca <- prcomp(
+  train.data_pca ,
+  center = TRUE,
+  scale.=TRUE
+)
+```
+
+#### Summary
+
+```{r}
+summary(data.pca)
+```
+
+#### How many PCs are need to explain at least 80% of the variance
+
+We need 9 PCs to explain at least 80% of the variance
+
+### Biplot
+
+```{r}
+ggbiplot(data.pca, choices = c(1,3))
+```
+
+## SVM
+
+### Default Model Fitting
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., data = train.data, method = "svmLinear",
+  trControl = trainControl("cv", number = 10),
+)
+```
+
+#### Prediction
+
+```{r}
+predicted.classes <- model %>% predict(test.data)
+```
+
+#### Confusion Matrix
+
+```{r}
+cm_svm <- confusionMatrix(
+  factor(predicted.classes), 
+  factor(test.data$y)
+)
+cm_svm
+```
+
+#### Sensitivity
+
+```{r}
+cm_svm$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_svm$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_svm$overall["Accuracy"]
+```
+
+### With tuneGrid = expand.grid(C = seq(0.001, 3, length = 30))
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., data = train.data, method = "svmLinear",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(C = seq(0.001,3, length = 30))
+)
+```
+
+#### Best Tune
+
+```{r}
+model$bestTune
+```
+
+The Optimal C is 2.482931
+
+#### Model with best Tune
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., data = train.data, method = "svmLinear",
+  trControl = trainControl("cv", number = 10),
+  tuneGrid = expand.grid(C = model$bestTune)
+)
+
+predicted.classes <- model %>% predict(test.data)
+
+cm_svm <-confusionMatrix(factor(predicted.classes), factor(test.data$y), positive = '1')
+
+cm_svm
+```
+
+#### Sensitivity
+
+```{r}
+cm_svm$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_svm$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_svm$overall["Accuracy"]
+```
+
+### With TuneLength = 10, radial basis kernel
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., 
+  data = train.data, 
+  method = "svmRadial",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 10
+)
+```
+
+#### Best Tune
+
+```{r}
+model$bestTune
+```
+
+The Optimal sigma and C are 0.4725552 and 2
+
+#### Prediction
+
+```{r}
+predicted.classes <- model %>% predict(test.data)
+```
+
+#### Confusion Matrix
+
+```{r}
+cm_svm <- confusionMatrix(
+  factor(predicted.classes), 
+  factor(test.data$y)
+)
+cm_svm
+```
+
+#### Sensitivity
+
+```{r}
+cm_svm$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_svm$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_svm$overall["Accuracy"]
+```
+
+### TuneLength = 3, polynomial basis kernel
+
+```{r}
+set.seed(123)
+model <- train(
+  y ~., 
+  data = train.data, 
+  method = "svmPoly",
+  trControl = trainControl("cv", number = 10),
+  tuneLength = 3
+)
+```
+
+#### Best Tune
+
+```{r}
+model$bestTune
+```
+
+#### Prediction
+
+```{r}
+predicted.classes <- model %>% predict(test.data)
+```
+
+#### Confusion Matrix
+
+```{r}
+cm_svm<-confusionMatrix(
+  factor(predicted.classes), 
+  factor(test.data$y), 
+  positive = '1'
+)
+cm_svm
+```
+
+#### Sensitivity
+
+```{r}
+cm_svm$byClass["Sensitivity"]
+```
+
+#### Specificity
+
+```{r}
+cm_svm$byClass["Specificity"]
+```
+
+#### Overall Accuracy
+
+```{r}
+cm_svm$overall["Accuracy"]
+```
+
+### Result
+
+The best Sensitivity
+
+**SVM with linear**
+
+```         
+ 0.954089 
+```
+
+The best Specificity
+
+**SVM with RBF, TuneLength = 10**
+
+```         
+ 0.8498896 
+```
+
+The best Overall Accuracy
+
+**SVM with RBF, TuneLength = 10**
+
+```         
+0.893913 
+```
+
+Overall the best model is SVM with RBF because according to the sensitivity, Specificity, overall accuracy, although sensitivity is not the highest but relatively speaking SVM with RBF has overall highest result.
