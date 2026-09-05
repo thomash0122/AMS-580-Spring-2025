@@ -1,0 +1,212 @@
+---
+title: "580Project"
+author: "Zian Shang"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r}
+# include packages
+
+```
+
+```{r}
+# read train.data
+train.data <- read.csv("train.csv",
+                       header = T, 
+                       na.strings = " ?")
+
+# remove NA
+train.data <- na.omit(train.data)
+
+# remove empty space in front of each char cell
+# factorize char columns
+
+# ***if needed, encoding char cells instead of factorizing them***
+
+train.data[] <- lapply(train.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x))
+                         else x
+                       })
+str(train.data)
+```
+
+```{r}
+# read test data
+test.data <-read.csv("test.csv", 
+                     header = T, 
+                     na.strings = " ?")
+
+# remove NA
+test.data <- na.omit(test.data)
+
+# remove empty space in front of each char cell
+# ***if needed, factorize/encode char cells***
+test.data[] <- lapply(test.data, 
+                       function(x) {
+                         if(is.character(x)) 
+                           as.factor(trimws(x)) 
+                         else x
+                       })
+str(test.data)
+```
+
+### variable selection, identify important features
+
+correlation analysis-\> Tasfia
+
+feature importance scores -\> random forest
+
+dimensionality reduction techniques -\> Zian
+
+outliers -\> Matthew
+
+### 
+
+tree-based models -\> use education(categorical, factorized)
+
+```{r}
+train.data.1 <- subset(train.data, select = -c(education.num))
+```
+
+### 
+
+logistic, linear, NN models -\> use education.num(numeric, original)
+
+```{r}
+train.data.2 <- subset(train.data, select = -c(education))
+```
+
+\*\*\* remember to optimize model parameters\*\*\*
+
+### model 1: multiple linear model -\> Thomas
+
+#### Drop education column in train and test
+
+```{r}
+#prep
+train.data.3 <- subset(train.data, select = -c(education))
+test.data <- subset(test.data, select = -c(education))
+```
+
+#### Convert income column to numeric
+
+```{r}
+train.data.3$income <- as.numeric(ifelse(train.data.3$income == ">50K","1","0"))
+test.data$income <- as.numeric(ifelse(test.data$income == ">50K","1","0"))
+```
+
+#### Scale train data (numeric column only)
+
+```{r}
+#for train data
+#Separate numeric predictors (exclude income) and categorical columns
+numeric_predictors <- train.data.3[, sapply(train.data.3, is.numeric) & names(train.data.3) != "income"]
+categorical_data <- train.data.3[sapply(train.data.3, is.factor)]
+#store income
+income <- train.data.3$income  # Keep income unscaled
+
+# Apply scale to numeric part
+# Scale numeric predictors
+scaled_numeric <- as.data.frame(scale(numeric_predictors))
+train_means <- sapply(numeric_predictors, mean)
+train_sds <- sapply(numeric_predictors, sd)
+
+# Combine scaled numeric data with categorical columns
+train.data.3 <- cbind(scaled_numeric, categorical_data, income)
+head(train.data.3)
+```
+
+#### Scale test data (numeric column only)
+
+```{r}
+# for test data
+# Separate numeric predictors (exclude income) and categorical columns
+numeric_predictors <- test.data[, sapply(test.data, is.numeric) & names(test.data) != "income"]
+categorical_data <- test.data[sapply(test.data, is.factor)]
+
+# Apply scale to numeric part of the test.data with train_means, train_sds
+scaled_test_numeric <- as.data.frame(
+  mapply(function(x, mean, sd) (x - mean) / sd, numeric_predictors, train_means, train_sds)
+)
+
+# Combine scaled numeric data with categorical columns
+test.data <- cbind(scaled_test_numeric, categorical_data, income = test.data$income)
+head(test.data)
+```
+
+#### Fit Multiple Linear Regression Model
+
+```{r}
+#fit mlr
+mlr_model <- lm(income ~ ., data = train.data.3)
+```
+
+#### Prediction
+
+```{r}
+#prediction
+pred_mlr <- predict(mlr_model, test.data)
+```
+
+#### Find Y and \hat{Y}
+
+```{r}
+# Evaluate (no descaling needed since income is unscaled)
+y <- test.data$income
+yhat <- pred_mlr
+```
+
+#### Predict class
+
+```{r}
+yhat_binary <- ifelse(pred_mlr > 0.5, 1, 0)  # Optional: binary prediction
+```
+
+#### Test MSE
+
+```{r}
+# MSE
+mse_mlr <- mean((y - yhat)^2)
+print(paste("MLR MSE:", mse_mlr))
+```
+
+#### Accuracy
+
+```{r}
+# Accuracy
+accuracy_mlr <- mean(y == yhat_binary)
+print(paste("MLR Accuracy:", accuracy_mlr))
+```
+
+### model 2: logistic model -\> Zian
+
+data scaling
+
+### model 3: NN model -\> Tasfia
+
+data scaling
+
+### model 4: CART model -\> Nicole
+
+do not scale
+
+### model 5: random forest model -\> Matthew
+
+do not scale
+
+### model 6: extra models, PCA, KNN... -\> decide latter
+
+### explore XgBoost classification --\> Thomas
+
+```{r}
+# check for data imbalance
+table(train.data$income)
+prop.table(table(train.data$income))
+# somewhat imbalanced
+```
+
+### ***if model predicts income\>50K poorly, try handle imbalance***
+
